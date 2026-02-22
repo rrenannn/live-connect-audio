@@ -1,12 +1,45 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from 'react';
+import { Headphones } from 'lucide-react';
+import { useWebRTC, UserType } from '@/hooks/useWebRTC';
+import { ConnectionPanel } from '@/components/ConnectionPanel';
+import { CallPanel } from '@/components/CallPanel';
+import { LogPanel } from '@/components/LogPanel';
 
 const Index = () => {
+  const { connectionStatus, callStatus, logs, remoteAudioRef, connect, disconnect, startCall, answerCall } = useWebRTC();
+  const [userType, setUserType] = useState<UserType>('client');
+
+  const handleConnect = (opts: { wsUrl: string; userType: UserType; userId: string; chatId: string; token: string }) => {
+    setUserType(opts.userType);
+    connect(opts);
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <header className="border-b bg-card/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <Headphones className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-foreground">WebRTC Audio</h1>
+            <p className="text-xs text-muted-foreground">Go SFU Test Client</p>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-3xl space-y-5 px-4 py-6">
+        <ConnectionPanel status={connectionStatus} onConnect={handleConnect} onDisconnect={disconnect} />
+        <CallPanel
+          connectionStatus={connectionStatus}
+          callStatus={callStatus}
+          userType={userType}
+          remoteAudioRef={remoteAudioRef}
+          onStartCall={startCall}
+          onAnswerCall={answerCall}
+        />
+        <LogPanel logs={logs} />
+      </main>
     </div>
   );
 };
