@@ -19,7 +19,14 @@ interface UseWebRTCOptions {
 }
 
 const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        {
+            urls: 'turn:3.238.87.0:3478',
+            username: 'user',
+            credential: 'pass'
+        }
+    ]
 };
 
 export function useWebRTC() {
