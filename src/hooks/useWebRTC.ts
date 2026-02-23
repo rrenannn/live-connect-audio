@@ -48,6 +48,9 @@ export function useWebRTC() {
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
     pcRef.current = pc;
+    pc.oniceconnectionstatechange = () => {
+        console.log("Status da Conexão de Mídia (ICE):", pc.iceConnectionState);
+    };
 
     stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
