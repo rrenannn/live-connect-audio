@@ -16,7 +16,7 @@ export function ConnectionPanel({ status, onConnect, onDisconnect }: ConnectionP
   const [userId, setUserId] = useState('1');
   const [chatId, setChatId] = useState('999');
   const [wsUrl, setWsUrl] = useState('ws://localhost:8080/chat/ws');
-  const [token, setToken] = useState('v2.local._YSEj-6uaoo3aN7qJGOT9rvm2NcfEvFBpgmbQAB7ha0LFiQJDXDsvU1mNaBJwIsWttkyu7_xI9z-NMBDkVMiOep9Gsx3sDxlEQm-wG-Kt_a5ntXZrCXTjgk5hsYHWVDMoL3fn8Q_tmmLTp_oSfmlBOMU_1uMFEM_LzTt8l1PJyhrpJF-Wx320al1QAVswWKPKqlRCyAsezmbXtYbONEC7uUD-yyFWo99E4chByF9xd6HPTqfRe0ZT7uWq9L35sPrt4eEqm6aQIHQjpSurgH0JQrXRO_izYbjebQIANJakEiOUebuig8d6Vg1B6_W9o6xYaGY9kIfZvRCu9G34f7Qe5QBEQR_RSVpVptafVv03_q7mIf2wkTH16qKg4IyvDvPTOUDFYfzGMUK7iAUBO7QSTO7N1HFTw.bnVsbA');
+  const [token, setToken] = useState('');
 
   const isConnected = status === 'connected';
   const isConnecting = status === 'connecting';
