@@ -13,9 +13,9 @@ interface ConnectionPanelProps {
 
 export function ConnectionPanel({ status, onConnect, onDisconnect }: ConnectionPanelProps) {
   const [userType, setUserType] = useState<UserType>('client');
-  const [userId, setUserId] = useState('1');
-  const [chatId, setChatId] = useState('999');
-  const [wsUrl, setWsUrl] = useState('ws://localhost:8080/chat/ws');
+  const [userId, setUserId] = useState('');
+  const [chatId, setChatId] = useState('');
+  const [wsUrl, setWsUrl] = useState('');
   const [token, setToken] = useState('');
 
   const isConnected = status === 'connected';
