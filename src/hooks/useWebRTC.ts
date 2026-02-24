@@ -96,19 +96,28 @@ export function useWebRTC() {
 
         if (mode === 'video') {
           if (remoteVideoRef.current) {
-            if (!remoteVideoRef.current.srcObject) {
-              remoteVideoRef.current.srcObject = new MediaStream();
+            // 1. Pega o stream atual ou cria um novo do zero
+            let stream = remoteVideoRef.current.srcObject as MediaStream;
+            if (!stream) {
+              stream = new MediaStream();
+              remoteVideoRef.current.srcObject = stream;
             }
-            const stream = remoteVideoRef.current.srcObject as MediaStream;
+
+            // 2. Injeta a track (áudio ou vídeo) dentro do stream
             stream.addTrack(track);
+
+            // 3. O SEGREDO PARA CELULAR: Forçar o play!
+            remoteVideoRef.current.play().catch(e => console.warn("Auto-play prevenido pelo celular:", e));
           }
         } else {
           if (remoteAudioRef.current) {
-            if (!remoteAudioRef.current.srcObject) {
-              remoteAudioRef.current.srcObject = new MediaStream();
+            let stream = remoteAudioRef.current.srcObject as MediaStream;
+            if (!stream) {
+              stream = new MediaStream();
+              remoteAudioRef.current.srcObject = stream;
             }
-            const stream = remoteAudioRef.current.srcObject as MediaStream;
             stream.addTrack(track);
+            remoteAudioRef.current.play().catch(e => console.warn("Auto-play prevenido:", e));
           }
         }
 
