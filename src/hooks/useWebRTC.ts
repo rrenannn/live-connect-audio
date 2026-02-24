@@ -3,6 +3,7 @@ import { useState, useRef, useCallback } from 'react';
 export type UserType = 'client' | 'user';
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 export type CallStatus = 'idle' | 'calling' | 'ringing' | 'in-call';
+export type CallMode = 'audio' | 'video';
 
 export interface LogEntry {
   time: string;
@@ -32,12 +33,15 @@ const RTC_CONFIG: RTCConfiguration = {
 export function useWebRTC() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [callStatus, setCallStatus] = useState<CallStatus>('idle');
+  const [callMode, setCallMode] = useState<CallMode>('audio');
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const chatIdRef = useRef<number>(0);
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
@@ -48,8 +52,8 @@ export function useWebRTC() {
     }]);
   }, []);
 
-  const setupWebRTC = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({
+  const setupWebRTC = useCallback(async (mode: CallMode) => {
+    const constraints: MediaStreamConstraints = {
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
@@ -57,10 +61,15 @@ export function useWebRTC() {
         channelCount: 1,
         sampleRate: 48000,
       },
-      video: false
-    });
+      video: mode === 'video' ? { width: 640, height: 480, frameRate: 30 } : false,
+    };
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
     localStreamRef.current = stream;
-    addLog('Microfone capturado com sucesso!', 'success');
+    addLog(`${mode === 'video' ? 'Câmera e microfone' : 'Microfone'} capturado com sucesso!`, 'success');
+
+    if (mode === 'video' && localVideoRef.current) {
+      localVideoRef.current.srcObject = stream;
+    }
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
     pcRef.current = pc;
@@ -71,8 +80,12 @@ export function useWebRTC() {
     stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
     pc.ontrack = (event) => {
-      addLog('Áudio remoto recebido! Tocando agora...', 'success');
-      if (remoteAudioRef.current) {
+      const track = event.track;
+      addLog(`Mídia remota recebida (${track.kind})!`, 'success');
+      if (track.kind === 'video' && remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = event.streams[0];
+      }
+      if (track.kind === 'audio' && remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = event.streams[0];
       }
       setCallStatus('in-call');
@@ -139,9 +152,10 @@ export function useWebRTC() {
     }
   }, [addLog]);
 
-  const startCall = useCallback(async () => {
+  const startCall = useCallback(async (mode: CallMode) => {
     setCallStatus('calling');
-    const pc = await setupWebRTC();
+    setCallMode(mode);
+    const pc = await setupWebRTC(mode);
 
     addLog('Criando oferta (Offer)...', 'info');
     const offer = await pc.createOffer();
@@ -155,9 +169,10 @@ export function useWebRTC() {
     addLog('Oferta enviada para o servidor.', 'success');
   }, [setupWebRTC, addLog]);
 
-  const answerCall = useCallback(async () => {
+  const answerCall = useCallback(async (mode: CallMode) => {
     setCallStatus('calling');
-    const pc = await setupWebRTC();
+    setCallMode(mode);
+    const pc = await setupWebRTC(mode);
 
     addLog('Criando oferta do atendente...', 'info');
     const offer = await pc.createOffer();
@@ -183,8 +198,11 @@ export function useWebRTC() {
   return {
     connectionStatus,
     callStatus,
+    callMode,
     logs,
     remoteAudioRef,
+    remoteVideoRef,
+    localVideoRef,
     connect,
     disconnect,
     startCall,
