@@ -127,7 +127,7 @@ export function useWebRTC() {
     };
 
     return pc;
-  }, [addLog]);
+  }, [addLog, sendWs]);
 
   const connect = useCallback(async (options: UseWebRTCOptions) => {
     const { wsUrl, userType, userId, chatId, token } = options;
