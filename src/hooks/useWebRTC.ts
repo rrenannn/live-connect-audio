@@ -93,12 +93,25 @@ export function useWebRTC() {
       pc.ontrack = (event) => {
         const track = event.track;
         addLog(`Mídia remota recebida (${track.kind})!`, 'success');
-        if (track.kind === 'video' && remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = event.streams[0];
+
+        if (mode === 'video') {
+          if (remoteVideoRef.current) {
+            if (!remoteVideoRef.current.srcObject) {
+              remoteVideoRef.current.srcObject = new MediaStream();
+            }
+            const stream = remoteVideoRef.current.srcObject as MediaStream;
+            stream.addTrack(track);
+          }
+        } else {
+          if (remoteAudioRef.current) {
+            if (!remoteAudioRef.current.srcObject) {
+              remoteAudioRef.current.srcObject = new MediaStream();
+            }
+            const stream = remoteAudioRef.current.srcObject as MediaStream;
+            stream.addTrack(track);
+          }
         }
-        if (track.kind === 'audio' && remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = event.streams[0];
-        }
+
         setCallStatus('in-call');
       };
 
