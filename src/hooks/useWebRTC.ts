@@ -49,7 +49,16 @@ export function useWebRTC() {
   }, []);
 
   const setupWebRTC = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+        sampleRate: 48000,
+      },
+      video: false
+    });
     localStreamRef.current = stream;
     addLog('Microfone capturado com sucesso!', 'success');
 
