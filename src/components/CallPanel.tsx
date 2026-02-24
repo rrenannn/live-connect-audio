@@ -22,7 +22,9 @@ export function CallPanel({ connectionStatus, callStatus, callMode, remoteAudioR
   const isInCall = callStatus === 'in-call';
   const [selectedMode, setSelectedMode] = useState<CallMode>('audio');
 
-  const showVideo = (isInCall && callMode === 'video') || (!isInCall && selectedMode === 'video');
+  const showVideo = (callStatus === 'calling' && selectedMode === 'video') ||
+      (isInCall && callMode === 'video') ||
+      (isRinging && selectedMode === 'video');
 
   return (
     <div className="rounded-xl border bg-card p-6 shadow-sm">
@@ -93,21 +95,44 @@ export function CallPanel({ connectionStatus, callStatus, callMode, remoteAudioR
 
       {/* Video area */}
       {showVideo && (
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <div className="relative rounded-lg overflow-hidden bg-muted aspect-video">
-            <video ref={localVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
-            <span className="absolute bottom-2 left-2 rounded bg-background/70 px-2 py-0.5 text-xs text-foreground">Você</span>
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Local Video - Sua Câmera */}
+            <div className="relative rounded-lg overflow-hidden bg-black aspect-video shadow-inner">
+              <video
+                  ref={localVideoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover -scale-x-100" // -scale-x-100 faz o efeito espelho (mais natural)
+              />
+              <span className="absolute bottom-2 left-2 rounded bg-black/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-md">Você</span>
+            </div>
+
+            {/* Remote Video - Câmera do outro */}
+            <div className="relative rounded-lg overflow-hidden bg-black aspect-video shadow-inner">
+              <video
+                  ref={remoteVideoRef}
+                  autoPlay
+                  playsInline
+                  className="w-full h-full object-cover"
+              />
+              <span className="absolute bottom-2 left-2 rounded bg-black/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-md">Remoto</span>
+            </div>
           </div>
-          <div className="relative rounded-lg overflow-hidden bg-muted aspect-video">
-            <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
-            <span className="absolute bottom-2 left-2 rounded bg-background/70 px-2 py-0.5 text-xs text-foreground">Remoto</span>
-          </div>
-        </div>
       )}
 
-      <div className="mt-5">
-        <audio ref={remoteAudioRef} autoPlay controls className="w-full rounded-lg" />
-      </div>
+      {/* Audio Controls - Só mostra se NÃO for vídeo para evitar áudio duplicado */}
+      {!showVideo && (
+          <div className="mt-5">
+            <audio
+                ref={remoteAudioRef}
+                autoPlay
+                playsInline
+                controls={isInCall}
+                className="w-full rounded-lg"
+            />
+          </div>
+      )}
     </div>
   );
 }
