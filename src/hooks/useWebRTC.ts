@@ -52,6 +52,21 @@ export function useWebRTC() {
     }]);
   }, []);
 
+  const sendWs = useCallback((data: unknown) => {
+    const ws = wsRef.current;
+    if (!ws) {
+      addLog('WebSocket não inicializado. Conecte antes de iniciar a chamada.', 'error');
+      return false;
+    }
+    if (ws.readyState !== WebSocket.OPEN) {
+      addLog(`WebSocket não está aberto (state: ${ws.readyState}). Aguarde conectar.`, 'error');
+      return false;
+    }
+
+    ws.send(JSON.stringify(data));
+    return true;
+  }, [addLog]);
+
   const setupWebRTC = useCallback(async (mode: CallMode) => {
     const constraints: MediaStreamConstraints = {
       audio: {
@@ -63,7 +78,16 @@ export function useWebRTC() {
       },
       video: mode === 'video' ? { width: 640, height: 480, frameRate: 30 } : false,
     };
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (err) {
+      const details = err instanceof Error ? err.message : String(err);
+      addLog(`Falha ao capturar ${mode === 'video' ? 'câmera/microfone' : 'microfone'}: ${details}`, 'error');
+      throw err;
+    }
+
     localStreamRef.current = stream;
     addLog(`${mode === 'video' ? 'Câmera e microfone' : 'Microfone'} capturado com sucesso!`, 'success');
 
@@ -74,7 +98,7 @@ export function useWebRTC() {
     const pc = new RTCPeerConnection(RTC_CONFIG);
     pcRef.current = pc;
     pc.oniceconnectionstatechange = () => {
-        console.log("Status da Conexão de Mídia (ICE):", pc.iceConnectionState);
+      console.log("Status da Conexão de Mídia (ICE):", pc.iceConnectionState);
     };
 
     stream.getTracks().forEach(track => pc.addTrack(track, stream));
@@ -92,13 +116,13 @@ export function useWebRTC() {
     };
 
     pc.onicecandidate = (event) => {
-      if (event.candidate && wsRef.current) {
+      if (event.candidate) {
         addLog('Enviando ICE Candidate...', 'info');
-        wsRef.current.send(JSON.stringify({
+        sendWs({
           type: 'event_ice',
           chat_id: chatIdRef.current,
           payload: event.candidate,
-        }));
+        });
       }
     };
 
@@ -153,38 +177,76 @@ export function useWebRTC() {
   }, [addLog]);
 
   const startCall = useCallback(async (mode: CallMode) => {
-    setCallStatus('calling');
     setCallMode(mode);
-    const pc = await setupWebRTC(mode);
+    setCallStatus('calling');
 
-    addLog('Criando oferta (Offer)...', 'info');
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+    try {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        addLog('WebSocket não está conectado; não é possível enviar webrtc_offer.', 'error');
+        setCallStatus('idle');
+        return;
+      }
 
-    wsRef.current?.send(JSON.stringify({
-      type: 'webrtc_offer',
-      chat_id: chatIdRef.current,
-      payload: pc.localDescription,
-    }));
-    addLog('Oferta enviada para o servidor.', 'success');
-  }, [setupWebRTC, addLog]);
+      const pc = await setupWebRTC(mode);
+
+      addLog('Criando oferta (Offer)...', 'info');
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      const ok = sendWs({
+        type: 'webrtc_offer',
+        chat_id: chatIdRef.current,
+        payload: pc.localDescription,
+      });
+
+      if (!ok) {
+        setCallStatus('idle');
+        return;
+      }
+
+      addLog('Oferta enviada para o servidor.', 'success');
+    } catch (err) {
+      const details = err instanceof Error ? err.message : String(err);
+      addLog(`Falha ao iniciar chamada: ${details}`, 'error');
+      setCallStatus('idle');
+    }
+  }, [setupWebRTC, addLog, sendWs]);
 
   const answerCall = useCallback(async (mode: CallMode) => {
-    setCallStatus('calling');
     setCallMode(mode);
-    const pc = await setupWebRTC(mode);
+    setCallStatus('calling');
 
-    addLog('Criando oferta do atendente...', 'info');
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+    try {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        addLog('WebSocket não está conectado; não é possível enviar webrtc_offer.', 'error');
+        setCallStatus('idle');
+        return;
+      }
 
-    wsRef.current?.send(JSON.stringify({
-      type: 'webrtc_offer',
-      chat_id: chatIdRef.current,
-      payload: pc.localDescription,
-    }));
-    addLog('Oferta do atendente enviada.', 'success');
-  }, [setupWebRTC, addLog]);
+      const pc = await setupWebRTC(mode);
+
+      addLog('Criando oferta do atendente...', 'info');
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      const ok = sendWs({
+        type: 'webrtc_offer',
+        chat_id: chatIdRef.current,
+        payload: pc.localDescription,
+      });
+
+      if (!ok) {
+        setCallStatus('idle');
+        return;
+      }
+
+      addLog('Oferta do atendente enviada.', 'success');
+    } catch (err) {
+      const details = err instanceof Error ? err.message : String(err);
+      addLog(`Falha ao atender chamada: ${details}`, 'error');
+      setCallStatus('idle');
+    }
+  }, [setupWebRTC, addLog, sendWs]);
 
   const disconnect = useCallback(() => {
     wsRef.current?.close();
