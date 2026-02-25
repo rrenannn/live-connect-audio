@@ -94,30 +94,26 @@ export function useWebRTC() {
         const track = event.track;
         addLog(`Mídia remota recebida (${track.kind})!`, 'success');
 
+        // Graças à correção no Go, event.streams[0] agora contém ÁUDIO E VÍDEO juntos!
+        const stream = event.streams[0];
+
         if (mode === 'video') {
-          if (remoteVideoRef.current) {
-            // 1. Pega o stream atual ou cria um novo do zero
-            let stream = remoteVideoRef.current.srcObject as MediaStream;
-            if (!stream) {
-              stream = new MediaStream();
+          if (remoteVideoRef.current && stream) {
+            if (remoteVideoRef.current.srcObject !== stream) {
               remoteVideoRef.current.srcObject = stream;
             }
 
-            // 2. Injeta a track (áudio ou vídeo) dentro do stream
-            stream.addTrack(track);
-
-            // 3. O SEGREDO PARA CELULAR: Forçar o play!
-            remoteVideoRef.current.play().catch(e => console.warn("Auto-play prevenido pelo celular:", e));
+            // O SEGREDO PARA CELULAR: Forçar o play para evitar a "tela congelada"
+            remoteVideoRef.current.play().catch(err => {
+              console.warn("Celular bloqueou o autoplay. O usuário precisa interagir.", err);
+            });
           }
         } else {
-          if (remoteAudioRef.current) {
-            let stream = remoteAudioRef.current.srcObject as MediaStream;
-            if (!stream) {
-              stream = new MediaStream();
+          if (remoteAudioRef.current && stream) {
+            if (remoteAudioRef.current.srcObject !== stream) {
               remoteAudioRef.current.srcObject = stream;
             }
-            stream.addTrack(track);
-            remoteAudioRef.current.play().catch(e => console.warn("Auto-play prevenido:", e));
+            remoteAudioRef.current.play().catch(err => console.warn("Autoplay de áudio bloqueado:", err));
           }
         }
 
