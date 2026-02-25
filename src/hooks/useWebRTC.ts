@@ -94,27 +94,28 @@ export function useWebRTC() {
         const track = event.track;
         addLog(`Mídia remota recebida (${track.kind})!`, 'success');
 
-        // Graças à correção no Go, event.streams[0] agora contém ÁUDIO E VÍDEO juntos!
-        const stream = event.streams[0];
+        // 1. Escolhe a tag correta baseada no modo da ligação
+        const mediaElement = mode === 'video' ? remoteVideoRef.current : remoteAudioRef.current;
 
-        if (mode === 'video') {
-          if (remoteVideoRef.current && stream) {
-            if (remoteVideoRef.current.srcObject !== stream) {
-              remoteVideoRef.current.srcObject = stream;
-            }
+        if (mediaElement) {
+          // 2. Se a tag ainda não tiver um stream, criamos um do zero
+          if (!mediaElement.srcObject) {
+            mediaElement.srcObject = new MediaStream();
+          }
 
-            // O SEGREDO PARA CELULAR: Forçar o play para evitar a "tela congelada"
-            remoteVideoRef.current.play().catch(err => {
-              console.warn("Celular bloqueou o autoplay. O usuário precisa interagir.", err);
-            });
+          // 3. Pegamos o stream que está rodando na tag
+          const stream = mediaElement.srcObject as MediaStream;
+
+          // 4. Injetamos a faixa (áudio ou vídeo) que acabou de chegar do Go
+          // A verificação impede que a mesma faixa seja adicionada duas vezes
+          if (!stream.getTrackById(track.id)) {
+            stream.addTrack(track);
           }
-        } else {
-          if (remoteAudioRef.current && stream) {
-            if (remoteAudioRef.current.srcObject !== stream) {
-              remoteAudioRef.current.srcObject = stream;
-            }
-            remoteAudioRef.current.play().catch(err => console.warn("Autoplay de áudio bloqueado:", err));
-          }
+
+          // 5. Forçamos o navegador a dar Play (vital para celulares)
+          mediaElement.play().catch(e => {
+            console.warn("Autoplay bloqueado pelo navegador. O usuário precisa interagir com a tela.", e);
+          });
         }
 
         setCallStatus('in-call');
