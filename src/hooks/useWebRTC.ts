@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 
+
 export type UserType = 'client' | 'user';
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 export type CallStatus = 'idle' | 'calling' | 'ringing' | 'in-call';
@@ -43,6 +44,7 @@ export function useWebRTC() {
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const chatIdRef = useRef<number>(0);
+  const [remoteStreams, setRemoteStreams] = useState<MediaStream[]>([]);
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     setLogs(prev => [...prev, {
@@ -92,32 +94,18 @@ export function useWebRTC() {
 
       pc.ontrack = (event) => {
         const track = event.track;
-        addLog(`Mídia remota recebida (${track.kind})!`, 'success');
+        // Pega o stream inteiro (áudio + vídeo agrupados pelo Go)
+        const stream = event.streams[0];
 
-        // 1. Escolhe a tag correta baseada no modo da ligação
-        const mediaElement = mode === 'video' ? remoteVideoRef.current : remoteAudioRef.current;
-
-        if (mediaElement) {
-          // 2. Se a tag ainda não tiver um stream, criamos um do zero
-          if (!mediaElement.srcObject) {
-            mediaElement.srcObject = new MediaStream();
-          }
-
-          // 3. Pegamos o stream que está rodando na tag
-          const stream = mediaElement.srcObject as MediaStream;
-
-          // 4. Injetamos a faixa (áudio ou vídeo) que acabou de chegar do Go
-          // A verificação impede que a mesma faixa seja adicionada duas vezes
-          if (!stream.getTrackById(track.id)) {
-            stream.addTrack(track);
-          }
-
-          // 5. Forçamos o navegador a dar Play (vital para celulares)
-          mediaElement.play().catch(e => {
-            console.warn("Autoplay bloqueado pelo navegador. O usuário precisa interagir com a tela.", e);
+        if (stream) {
+          setRemoteStreams(prevStreams => {
+            // Verifica se esse stream já está na lista para não duplicar
+            if (!prevStreams.find(s => s.id === stream.id)) {
+              return [...prevStreams, stream];
+            }
+            return prevStreams;
           });
         }
-
         setCallStatus('in-call');
       };
 
@@ -169,6 +157,25 @@ export function useWebRTC() {
           addLog(`Chamada recebida! Tipo: ${msg.mode}`, 'warning');
           setCallMode(msg.mode || 'audio');
           setCallStatus('ringing');
+        }
+
+        if (msg.type === 'webrtc_server_offer') {
+          addLog('Opa! Alguém novo entrou na sala. Atualizando conexão...', 'info');
+          const pc = pcRef.current;
+          if (!pc) return;
+
+          // Aceita a oferta nova do servidor
+          await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
+
+          // Cria a resposta e envia de volta
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+
+          wsRef.current?.send(JSON.stringify({
+            type: 'webrtc_client_answer',
+            chat_id: chatIdRef.current,
+            payload: pc.localDescription,
+          }));
         }
       };
 
@@ -258,6 +265,7 @@ export function useWebRTC() {
     logs,
     remoteAudioRef,
     remoteVideoRef,
+    remoteStreams,
     localVideoRef,
     connect,
     disconnect,
