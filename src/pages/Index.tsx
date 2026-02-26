@@ -6,7 +6,7 @@ import { CallPanel } from '@/components/CallPanel';
 import { LogPanel } from '@/components/LogPanel';
 
 const Index = () => {
-  const { connectionStatus, callStatus, callMode, logs, remoteStreams, localVideoRef, connect, disconnect, startCall, answerCall } = useWebRTC();
+  const { connectionStatus, callStatus, callMode, activeRoomId, logs, remoteStreams, localVideoRef, connect, disconnect, startCall, joinCall } = useWebRTC();
   const [userType, setUserType] = useState<UserType>('client');
 
   const handleConnect = (opts: { wsUrl: string; userType: UserType; userId: string; token: string }) => {
@@ -31,14 +31,14 @@ const Index = () => {
       <main className="mx-auto max-w-3xl space-y-5 px-4 py-6">
         <ConnectionPanel status={connectionStatus} onConnect={handleConnect} onDisconnect={disconnect} />
         <CallPanel
-          connectionStatus={connectionStatus}
-          callStatus={callStatus}
-          callMode={callMode}
-          userType={userType}
-          remoteStreams={remoteStreams}
-          localVideoRef={localVideoRef}
-          onStartCall={startCall}
-          onAnswerCall={answerCall}
+            connectionStatus={connectionStatus}
+            callStatus={callStatus}
+            callMode={callMode}
+            activeRoomId={activeRoomId}
+            localVideoRef={localVideoRef}
+            remoteStreams={remoteStreams}
+            onStartCall={startCall}
+            onJoinCall={joinCall} // <-- Troque onAnswerCall por onJoinCall!
         />
         <LogPanel logs={logs} />
       </main>
