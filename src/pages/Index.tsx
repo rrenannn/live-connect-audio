@@ -6,7 +6,7 @@ import { CallPanel } from '@/components/CallPanel';
 import { LogPanel } from '@/components/LogPanel';
 
 const Index = () => {
-  const { connectionStatus, callStatus, callMode, logs, remoteAudioRef, remoteVideoRef, localVideoRef, connect, disconnect, startCall, answerCall } = useWebRTC();
+  const { connectionStatus, callStatus, callMode, logs, remoteStreams, localVideoRef, connect, disconnect, startCall, answerCall } = useWebRTC();
   const [userType, setUserType] = useState<UserType>('client');
 
   const handleConnect = (opts: { wsUrl: string; userType: UserType; userId: string; chatId: string; token: string }) => {
@@ -35,8 +35,7 @@ const Index = () => {
           callStatus={callStatus}
           callMode={callMode}
           userType={userType}
-          remoteAudioRef={remoteAudioRef}
-          remoteVideoRef={remoteVideoRef}
+          remoteStreams={remoteStreams}
           localVideoRef={localVideoRef}
           onStartCall={startCall}
           onAnswerCall={answerCall}
