@@ -16,7 +16,6 @@ interface UseWebRTCOptions {
   wsUrl: string;
   userType: UserType;
   userId: string;
-  chatId: string;
   token: string;
 }
 
@@ -43,7 +42,7 @@ export function useWebRTC() {
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
-  const chatIdRef = useRef<number>(0);
+  
   const [remoteStreams, setRemoteStreams] = useState<MediaStream[]>([]);
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
@@ -110,11 +109,10 @@ export function useWebRTC() {
       };
 
       pc.onicecandidate = (event) => {
-        if (event.candidate && wsRef.current) {
+        if (event.candidate && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           addLog('Enviando ICE Candidate...', 'info');
           wsRef.current.send(JSON.stringify({
             type: 'event_ice',
-            chat_id: chatIdRef.current,
             payload: event.candidate,
           }));
         }
@@ -129,8 +127,7 @@ export function useWebRTC() {
   }, [addLog]);
 
   const connect = useCallback(async (options: UseWebRTCOptions) => {
-    const { wsUrl, userType, userId, chatId, token } = options;
-    chatIdRef.current = parseInt(chatId);
+    const { wsUrl, userType, userId, token } = options;
     setConnectionStatus('connecting');
 
     const finalUrl = `${wsUrl}?user_id=${userId}&user_type=${userType}&token=${token}`;
@@ -173,7 +170,6 @@ export function useWebRTC() {
 
           wsRef.current?.send(JSON.stringify({
             type: 'webrtc_client_answer',
-            chat_id: chatIdRef.current,
             payload: pc.localDescription,
           }));
         }
@@ -207,7 +203,6 @@ export function useWebRTC() {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'webrtc_offer',
-          chat_id: chatIdRef.current,
           mode: mode,
           payload: offer,
         }));
@@ -234,7 +229,6 @@ export function useWebRTC() {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'webrtc_offer',
-          chat_id: chatIdRef.current,
           mode: mode,
           payload: offer,
         }));

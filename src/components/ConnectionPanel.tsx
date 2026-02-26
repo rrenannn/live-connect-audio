@@ -7,14 +7,14 @@ import type { ConnectionStatus, UserType } from '@/hooks/useWebRTC';
 
 interface ConnectionPanelProps {
   status: ConnectionStatus;
-  onConnect: (opts: { wsUrl: string; userType: UserType; userId: string; chatId: string; token: string }) => void;
+  onConnect: (opts: { wsUrl: string; userType: UserType; userId: string; token: string }) => void;
   onDisconnect: () => void;
 }
 
 export function ConnectionPanel({ status, onConnect, onDisconnect }: ConnectionPanelProps) {
   const [userType, setUserType] = useState<UserType>('client');
   const [userId, setUserId] = useState('');
-  const [chatId, setChatId] = useState('');
+  
   const [wsUrl, setWsUrl] = useState('');
   const [token, setToken] = useState('');
 
@@ -68,15 +68,9 @@ export function ConnectionPanel({ status, onConnect, onDisconnect }: ConnectionP
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
+        <div className="space-y-2">
             <Label htmlFor="userId">Seu ID</Label>
             <Input id="userId" type="number" value={userId} onChange={e => setUserId(e.target.value)} disabled={isConnected} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="chatId">Chat ID</Label>
-            <Input id="chatId" type="number" value={chatId} onChange={e => setChatId(e.target.value)} disabled={isConnected} />
-          </div>
         </div>
 
         <div className="space-y-2 sm:col-span-2">
@@ -96,7 +90,7 @@ export function ConnectionPanel({ status, onConnect, onDisconnect }: ConnectionP
             <WifiOff className="mr-2 h-4 w-4" /> Desconectar
           </Button>
         ) : (
-          <Button onClick={() => onConnect({ wsUrl, userType, userId, chatId, token })} disabled={isConnecting} className="w-full">
+          <Button onClick={() => onConnect({ wsUrl, userType, userId, token })} disabled={isConnecting} className="w-full">
             {isConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wifi className="mr-2 h-4 w-4" />}
             Conectar
           </Button>

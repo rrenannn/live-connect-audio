@@ -9,7 +9,7 @@ const Index = () => {
   const { connectionStatus, callStatus, callMode, logs, remoteStreams, localVideoRef, connect, disconnect, startCall, answerCall } = useWebRTC();
   const [userType, setUserType] = useState<UserType>('client');
 
-  const handleConnect = (opts: { wsUrl: string; userType: UserType; userId: string; chatId: string; token: string }) => {
+  const handleConnect = (opts: { wsUrl: string; userType: UserType; userId: string; token: string }) => {
     setUserType(opts.userType);
     connect(opts);
   };
