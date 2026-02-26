@@ -14,7 +14,7 @@ interface ConnectionPanelProps {
 export function ConnectionPanel({ status, onConnect, onDisconnect }: ConnectionPanelProps) {
   const [userType, setUserType] = useState<UserType>('client');
   const [userId, setUserId] = useState('');
-  
+
   const [wsUrl, setWsUrl] = useState('');
   const [token, setToken] = useState('');
 
