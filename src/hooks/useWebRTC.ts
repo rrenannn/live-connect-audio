@@ -11,6 +11,12 @@ export interface LogEntry {
   type: 'info' | 'success' | 'error' | 'warning';
 }
 
+export interface IncomingCall {
+  roomId: string;
+  callerName: string;
+  mode: CallMode;
+}
+
 interface UseWebRTCOptions {
   wsUrl: string;
   userType: UserType;
@@ -21,11 +27,6 @@ interface UseWebRTCOptions {
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
-    {
-      urls: 'turn:3.238.87.0:3478',
-      username: 'user',
-      credential: 'pass'
-    }
   ]
 };
 
@@ -34,6 +35,8 @@ export function useWebRTC() {
   const [callStatus, setCallStatus] = useState<CallStatus>('idle');
   const [callMode, setCallMode] = useState<CallMode>('audio');
   const [logs, setLogs] = useState<LogEntry[]>([]);
+
+  const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
 
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const activeRoomIdRef = useRef<string | null>(null);
@@ -83,6 +86,7 @@ export function useWebRTC() {
 
       const pc = new RTCPeerConnection(RTC_CONFIG);
       pcRef.current = pc;
+
       pc.oniceconnectionstatechange = () => {
         console.log("Status da Conexão de Mídia (ICE):", pc.iceConnectionState);
       };
@@ -90,13 +94,11 @@ export function useWebRTC() {
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
       pc.ontrack = (event) => {
-        // SEGREDO SFU: Se o navegador não entregar o array de streams, nós mesmos criamos um!
         const incomingStream = event.streams && event.streams.length > 0
             ? event.streams[0]
             : new MediaStream([event.track]);
 
         setRemoteStreams(prevStreams => {
-          // Verifica se o ID desse stream já está na tela
           if (!prevStreams.find(s => s.id === incomingStream.id)) {
             return [...prevStreams, incomingStream];
           }
@@ -124,8 +126,6 @@ export function useWebRTC() {
 
   const connect = useCallback(async (options: UseWebRTCOptions) => {
     const { wsUrl, userType, userId, token } = options;
-
-    // 1. TRAVAS DE SEGURANÇA COM AVISO VISUAL
     if (!wsUrl || wsUrl.trim() === '') {
       addLog('Erro: Preencha a URL do WebSocket!', 'error');
       return;
@@ -139,7 +139,7 @@ export function useWebRTC() {
     const finalUrl = `${wsUrl}?user_id=${userId}&user_type=${userType}&token=${token}`;
 
     try {
-      const ws = new WebSocket(finalUrl); // Se a URL for inválida, ele pula pro catch!
+      const ws = new WebSocket(finalUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -149,6 +149,15 @@ export function useWebRTC() {
 
       ws.onmessage = async (event) => {
         const msg = JSON.parse(event.data);
+
+        if (msg.type === 'webrtc_incoming_call') {
+          addLog(`Recebendo ligação de ${msg.payload.caller_name}...`, 'info');
+          setIncomingCall({
+            roomId: msg.room_id,
+            callerName: msg.payload.caller_name,
+            mode: msg.mode as CallMode
+          });
+        }
 
         if (msg.type === 'webrtc_answer') {
           addLog('Conexão estabelecida com a sala.', 'success');
@@ -170,6 +179,13 @@ export function useWebRTC() {
             payload: pc.localDescription,
           }));
         }
+
+        if (msg.type === 'webrtc_ice_candidate') {
+          if (pcRef.current && msg.payload) {
+            pcRef.current.addIceCandidate(new RTCIceCandidate(msg.payload))
+                .catch(err => console.error("Erro ao adicionar ICE Candidate do servidor:", err));
+          }
+        }
       };
 
       ws.onclose = () => {
@@ -180,20 +196,17 @@ export function useWebRTC() {
 
       ws.onerror = (error) => {
         console.error("Erro interno do WebSocket:", error);
-        addLog('Erro na conexão WebSocket. O servidor está rodando?', 'error');
+        addLog('Erro na conexão WebSocket.', 'error');
         setConnectionStatus('disconnected');
       };
 
     } catch (err) {
-      // 2. AQUI ESTAVA O BURACO NEGRO DO ERRO SILENCIOSO
       console.error("Erro fatal ao criar WebSocket:", err);
-      const errorMessage = err instanceof Error ? err.message : 'URL inválida';
-      addLog(`Falha fatal na conexão: ${errorMessage}`, 'error');
       setConnectionStatus('disconnected');
     }
   }, [addLog]);
 
-  const startCall = useCallback(async (mode: CallMode) => {
+  const startCall = useCallback(async (mode: CallMode, targetUserType?: string, targetUserId?: string) => {
     try {
       const newRoomId = `meet_${Math.random().toString(36).substring(2, 9)}`;
       setActiveRoomId(newRoomId);
@@ -213,12 +226,27 @@ export function useWebRTC() {
           mode: mode,
           payload: offer,
         }));
-        addLog(`Sala ${newRoomId} criada.`, 'success');
+
+        if (targetUserType && targetUserId) {
+          wsRef.current.send(JSON.stringify({
+            type: 'webrtc_invite',
+            room_id: newRoomId,
+            mode: mode,
+            payload: {
+              caller_name: "Atendente",
+              convidados: [
+                { user_type: targetUserType, user_id: Number(targetUserId) }
+              ]
+            }
+          }));
+          addLog(`Ligando para ${targetUserType} ${targetUserId}...`, 'info');
+        } else {
+          addLog(`Sala ${newRoomId} criada.`, 'success');
+        }
       }
     } catch (err) {
       console.error(err);
-      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
-      addLog(`Falha ao criar sala: ${errorMessage}`, 'error');
+      addLog(`Falha ao criar sala.`, 'error');
       setCallStatus('idle');
     }
   }, [setupWebRTC, addLog]);
@@ -239,7 +267,7 @@ export function useWebRTC() {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'webrtc_offer',
-          room_id: roomIdToJoin, // <-- removi o chat_id daqui também
+          room_id: roomIdToJoin,
           mode: mode,
           payload: offer,
         }));
@@ -247,36 +275,48 @@ export function useWebRTC() {
       }
     } catch (err) {
       console.error(err);
-      const errorMessage = err instanceof Error ? err.message : 'Erro de mídia';
-      addLog(`Falha ao entrar: ${errorMessage}`, 'error');
+      addLog(`Falha ao entrar na sala.`, 'error');
       setCallStatus('idle');
     }
   }, [setupWebRTC, addLog]);
 
+  const acceptCall = useCallback(async () => {
+    if (!incomingCall) return;
+    await joinCall(incomingCall.roomId, incomingCall.mode);
+    setIncomingCall(null);
+  }, [incomingCall, joinCall]);
+
+  const rejectCall = useCallback(() => {
+    setIncomingCall(null);
+    addLog('Ligação recusada.', 'warning');
+  }, [addLog]);
+
   const disconnect = useCallback(() => {
-    wsRef.current?.close();
-    pcRef.current?.close();
-    localStreamRef.current?.getTracks().forEach(t => t.stop());
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
+    }
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(t => t.stop());
+      localStreamRef.current = null;
+    }
+
     setConnectionStatus('disconnected');
     setCallStatus('idle');
     setActiveRoomId(null);
     activeRoomIdRef.current = null;
     setRemoteStreams([]);
-    addLog('Desconectado da sala.', 'info');
+    setIncomingCall(null);
+
+    addLog('Desconectado com sucesso.', 'info');
   }, [addLog]);
 
   return {
-    connectionStatus,
-    callStatus,
-    callMode,
-    activeRoomId,
-    logs,
-    remoteStreams,
-    localVideoRef,
-    connect,
-    disconnect,
-    startCall,
-    joinCall,
-    addLog,
+    connectionStatus, callStatus, callMode, activeRoomId, logs, remoteStreams, localVideoRef,
+    incomingCall, connect, disconnect, startCall, joinCall, acceptCall, rejectCall, addLog,
   };
 }

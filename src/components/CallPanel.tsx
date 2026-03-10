@@ -1,7 +1,7 @@
-import { Phone, PhoneCall, Video, LogIn, Copy } from 'lucide-react';
+import { Phone, PhoneCall, Video, LogIn, Copy, PhoneIncoming } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { CallStatus, ConnectionStatus, CallMode } from '@/hooks/useWebRTC';
+import type { CallStatus, ConnectionStatus, CallMode, IncomingCall } from '@/hooks/useWebRTC';
 import { RefObject, useState, useEffect, useRef } from 'react';
 
 function RemoteMedia({ stream, isVideo }: { stream: MediaStream; isVideo: boolean }) {
@@ -39,8 +39,11 @@ interface CallPanelProps {
     activeRoomId: string | null;
     localVideoRef: RefObject<HTMLVideoElement | null>;
     remoteStreams: MediaStream[];
-    onStartCall: (mode: CallMode) => void;
+    incomingCall: IncomingCall | null;
+    onStartCall: (mode: CallMode, targetUserType?: string, targetUserId?: string) => void;
     onJoinCall: (roomId: string, mode: CallMode) => void;
+    onAcceptCall: () => void;
+    onRejectCall: () => void;
 }
 
 export function CallPanel({
@@ -50,14 +53,20 @@ export function CallPanel({
                               activeRoomId,
                               localVideoRef,
                               remoteStreams,
+                              incomingCall,
                               onStartCall,
-                              onJoinCall
+                              onJoinCall,
+                              onAcceptCall,
+                              onRejectCall
                           }: CallPanelProps) {
     const isConnected = connectionStatus === 'connected';
     const isIdle = callStatus === 'idle';
     const isInCall = callStatus === 'in-call';
     const [selectedMode, setSelectedMode] = useState<CallMode>('video');
     const [roomInput, setRoomInput] = useState('');
+
+    const [targetType, setTargetType] = useState('client');
+    const [targetId, setTargetId] = useState('');
 
     const showVideo = isInCall && callMode === 'video';
 
@@ -75,7 +84,6 @@ export function CallPanel({
                 </div>
             </div>
 
-            {/* Mostrar ID da Sala Ativa */}
             {isInCall && activeRoomId && (
                 <div className="mb-4 flex items-center justify-between bg-muted/50 p-3 rounded-lg border border-border">
                     <div>
@@ -93,7 +101,31 @@ export function CallPanel({
                 </div>
             )}
 
-            {isIdle && (
+            {incomingCall && isIdle && (
+                <div className="mb-6 animate-in fade-in slide-in-from-top-4 rounded-xl border border-yellow-500 bg-yellow-500/10 p-5 shadow-md">
+                    <div className="flex items-center gap-4 mb-4">
+                        <div className="flex h-12 w-12 animate-pulse items-center justify-center rounded-full bg-yellow-500 text-white">
+                            <PhoneIncoming className="h-6 w-6" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-yellow-600 dark:text-yellow-500">Ligação Recebida</h3>
+                            <p className="text-sm font-medium">
+                                <strong>{incomingCall.callerName}</strong> está te chamando para {incomingCall.mode === 'video' ? 'Vídeo' : 'Áudio'}...
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex gap-3">
+                        <Button onClick={onAcceptCall} className="flex-1 bg-green-600 hover:bg-green-700 text-white">
+                            Atender
+                        </Button>
+                        <Button onClick={onRejectCall} variant="destructive" className="flex-1">
+                            Recusar
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+            {isIdle && !incomingCall && (
                 <>
                     <div className="mb-4 flex gap-2">
                         <button
@@ -119,13 +151,35 @@ export function CallPanel({
                     </div>
 
                     <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-3 p-3 bg-muted/30 rounded-lg border">
+                            <div>
+                                <label className="text-xs font-medium text-muted-foreground mb-1 block">Convidar (Tipo)</label>
+                                <select
+                                    className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                    value={targetType}
+                                    onChange={(e) => setTargetType(e.target.value)}
+                                >
+                                    <option value="client">Cliente</option>
+                                    <option value="user">Atendente</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-medium text-muted-foreground mb-1 block">Convidar (ID)</label>
+                                <Input
+                                    placeholder="Ex: 54"
+                                    value={targetId}
+                                    onChange={(e) => setTargetId(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
                         <Button
-                            onClick={() => onStartCall(selectedMode)}
+                            onClick={() => onStartCall(selectedMode, targetType, targetId)}
                             disabled={!isConnected}
                             className="w-full bg-primary hover:bg-primary/90 py-6"
                         >
                             {selectedMode === 'video' ? <Video className="mr-2 h-5 w-5" /> : <PhoneCall className="mr-2 h-5 w-5" />}
-                            Nova Reunião
+                            Ligar e Convidar
                         </Button>
 
                         <div className="relative">
@@ -153,7 +207,6 @@ export function CallPanel({
                 </>
             )}
 
-            {/* Mosaico de Vídeo Dinâmico */}
             {showVideo && (
                 <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                     <div className="relative rounded-lg overflow-hidden bg-black aspect-video shadow-inner">
@@ -172,7 +225,6 @@ export function CallPanel({
                 </div>
             )}
 
-            {/* Controle de Áudio Dinâmico */}
             {!showVideo && isInCall && (
                 <div className="mt-5 flex flex-col gap-2">
                     {remoteStreams.map((stream) => (
