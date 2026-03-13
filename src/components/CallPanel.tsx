@@ -1,8 +1,18 @@
-import { Phone, PhoneCall, Video, LogIn, Copy, PhoneIncoming } from 'lucide-react';
+import { Phone, PhoneCall, Video, LogIn, Copy, PhoneIncoming, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { CallStatus, ConnectionStatus, CallMode, IncomingCall } from '@/hooks/useWebRTC';
 import { RefObject, useState, useEffect, useRef } from 'react';
+
+// Nova interface para o chamado que chega do backend para o atendente
+export interface AgentPendingCall {
+    roomId: string;
+    targetUserId: string;
+    targetUserType: string;
+    mode: CallMode;
+    callerName: string;
+    assunto: string;
+}
 
 function RemoteMedia({ stream, isVideo }: { stream: MediaStream; isVideo: boolean }) {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -39,11 +49,19 @@ interface CallPanelProps {
     activeRoomId: string | null;
     localVideoRef: RefObject<HTMLVideoElement | null>;
     remoteStreams: MediaStream[];
+
+    // Props do Cliente
     incomingCall: IncomingCall | null;
-    onStartCall: (mode: CallMode, targetUserType?: string, targetUserId?: string) => void;
-    onJoinCall: (roomId: string, mode: CallMode) => void;
     onAcceptCall: () => void;
     onRejectCall: () => void;
+
+    // Props do Atendente (NOVO)
+    agentPendingCall?: AgentPendingCall | null;
+    onDismissAgentCall?: () => void;
+
+    // Atualizado com o roomId opcional
+    onStartCall: (mode: CallMode, targetUserType?: string, targetUserId?: string, providedRoomId?: string) => void;
+    onJoinCall: (roomId: string, mode: CallMode) => void;
 }
 
 export function CallPanel({
@@ -54,19 +72,23 @@ export function CallPanel({
                               localVideoRef,
                               remoteStreams,
                               incomingCall,
+                              agentPendingCall,
                               onStartCall,
                               onJoinCall,
                               onAcceptCall,
-                              onRejectCall
+                              onRejectCall,
+                              onDismissAgentCall
                           }: CallPanelProps) {
     const isConnected = connectionStatus === 'connected';
     const isIdle = callStatus === 'idle';
     const isInCall = callStatus === 'in-call';
-    const [selectedMode, setSelectedMode] = useState<CallMode>('video');
+
+    const [selectedMode, setSelectedMode] = useState<CallMode>('audio');
     const [roomInput, setRoomInput] = useState('');
 
     const [targetType, setTargetType] = useState('client');
     const [targetId, setTargetId] = useState('');
+    const [manualRoomId, setManualRoomId] = useState(''); // Para testes manuais
 
     const showVideo = isInCall && callMode === 'video';
 
@@ -101,6 +123,7 @@ export function CallPanel({
                 </div>
             )}
 
+            {/* NOTIFICAÇÃO DO CLIENTE: Recebendo o convite WebRTC */}
             {incomingCall && isIdle && (
                 <div className="mb-6 animate-in fade-in slide-in-from-top-4 rounded-xl border border-yellow-500 bg-yellow-500/10 p-5 shadow-md">
                     <div className="flex items-center gap-4 mb-4">
@@ -125,7 +148,45 @@ export function CallPanel({
                 </div>
             )}
 
-            {isIdle && !incomingCall && (
+            {/* NOTIFICAÇÃO DO ATENDENTE: Ticket atribuído pela fila ou central */}
+            {agentPendingCall && isIdle && !incomingCall && (
+                <div className="mb-6 animate-in fade-in slide-in-from-top-4 rounded-xl border border-blue-500 bg-blue-500/10 p-5 shadow-md">
+                    <div className="flex items-center gap-4 mb-4">
+                        <div className="flex h-12 w-12 animate-pulse items-center justify-center rounded-full bg-blue-500 text-white">
+                            <UserPlus className="h-6 w-6" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-blue-600 dark:text-blue-500">Novo Atendimento</h3>
+                            <p className="text-sm font-medium">
+                                <strong>{agentPendingCall.callerName}</strong> aguardando atendimento.
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Assunto: {agentPendingCall.assunto}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex gap-3">
+                        <Button
+                            onClick={() => onStartCall(
+                                agentPendingCall.mode,
+                                agentPendingCall.targetUserType,
+                                agentPendingCall.targetUserId,
+                                agentPendingCall.roomId
+                            )}
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                            Iniciar Chamada
+                        </Button>
+                        {onDismissAgentCall && (
+                            <Button onClick={onDismissAgentCall} variant="outline" className="flex-1">
+                                Ocultar
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {isIdle && !incomingCall && !agentPendingCall && (
                 <>
                     <div className="mb-4 flex gap-2">
                         <button
@@ -152,7 +213,7 @@ export function CallPanel({
 
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-3 p-3 bg-muted/30 rounded-lg border">
-                            <div>
+                            <div className="col-span-2 sm:col-span-1">
                                 <label className="text-xs font-medium text-muted-foreground mb-1 block">Convidar (Tipo)</label>
                                 <select
                                     className="w-full rounded-md border bg-background px-3 py-2 text-sm"
@@ -160,10 +221,11 @@ export function CallPanel({
                                     onChange={(e) => setTargetType(e.target.value)}
                                 >
                                     <option value="client">Cliente</option>
+                                    <option value="lead">Lead</option>
                                     <option value="user">Atendente</option>
                                 </select>
                             </div>
-                            <div>
+                            <div className="col-span-2 sm:col-span-1">
                                 <label className="text-xs font-medium text-muted-foreground mb-1 block">Convidar (ID)</label>
                                 <Input
                                     placeholder="Ex: 54"
@@ -171,10 +233,18 @@ export function CallPanel({
                                     onChange={(e) => setTargetId(e.target.value)}
                                 />
                             </div>
+                            <div className="col-span-2">
+                                <label className="text-xs font-medium text-muted-foreground mb-1 block">Room ID (Opcional - Usado para testes)</label>
+                                <Input
+                                    placeholder="Ex: meet_atd_54"
+                                    value={manualRoomId}
+                                    onChange={(e) => setManualRoomId(e.target.value)}
+                                />
+                            </div>
                         </div>
 
                         <Button
-                            onClick={() => onStartCall(selectedMode, targetType, targetId)}
+                            onClick={() => onStartCall(selectedMode, targetType, targetId, manualRoomId || undefined)}
                             disabled={!isConnected}
                             className="w-full bg-primary hover:bg-primary/90 py-6"
                         >
@@ -207,6 +277,7 @@ export function CallPanel({
                 </>
             )}
 
+            {/* SEÇÃO DE VÍDEO E ÁUDIO ABAIXO SE MANTÉM IGUAL */}
             {showVideo && (
                 <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                     <div className="relative rounded-lg overflow-hidden bg-black aspect-video shadow-inner">

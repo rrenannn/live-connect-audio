@@ -35,6 +35,7 @@ export function useWebRTC() {
   const [callStatus, setCallStatus] = useState<CallStatus>('idle');
   const [callMode, setCallMode] = useState<CallMode>('audio');
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [agentPendingCall, setAgentPendingCall] = useState<any>(null);
 
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
 
@@ -150,6 +151,18 @@ export function useWebRTC() {
       ws.onmessage = async (event) => {
         const msg = JSON.parse(event.data);
 
+        if (msg.type === 'novo_chamado_recebido') {
+          addLog(`Novo atendimento atribuído da fila!`, 'info');
+          setAgentPendingCall({
+            roomId: msg.payload.room_id,
+            targetUserId: msg.payload.target_user_id,
+            targetUserType: msg.payload.target_user_type,
+            mode: msg.payload.mode,
+            callerName: msg.payload.nome_solicitante,
+            assunto: msg.payload.assunto
+          });
+        }
+
         if (msg.type === 'webrtc_incoming_call') {
           addLog(`Recebendo ligação de ${msg.payload.caller_name}...`, 'info');
           setIncomingCall({
@@ -206,9 +219,16 @@ export function useWebRTC() {
     }
   }, [addLog]);
 
-  const startCall = useCallback(async (mode: CallMode, targetUserType?: string, targetUserId?: string) => {
+  const startCall = useCallback(async (
+      mode: CallMode,
+      targetUserType?: string,
+      targetUserId?: string,
+      providedRoomId?: string // <-- Novo parâmetro opcional adicionado aqui
+  ) => {
     try {
-      const newRoomId = `meet_${Math.random().toString(36).substring(2, 9)}`;
+      // Se o back-end mandar o ID da sala (ex: meet_atd_54), ele usa. Se não, gera aleatório (Fallback)
+      const newRoomId = providedRoomId || `meet_${Math.random().toString(36).substring(2, 9)}`;
+
       setActiveRoomId(newRoomId);
       activeRoomIdRef.current = newRoomId;
 
@@ -233,13 +253,13 @@ export function useWebRTC() {
             room_id: newRoomId,
             mode: mode,
             payload: {
-              caller_name: "Atendente",
+              caller_name: "Atendente", // No futuro pode trocar para o nome real do atendente logado
               convidados: [
                 { user_type: targetUserType, user_id: Number(targetUserId) }
               ]
             }
           }));
-          addLog(`Ligando para ${targetUserType} ${targetUserId}...`, 'info');
+          addLog(`Ligando para ${targetUserType} ${targetUserId} na sala ${newRoomId}...`, 'info');
         } else {
           addLog(`Sala ${newRoomId} criada.`, 'success');
         }
